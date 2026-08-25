@@ -10,23 +10,23 @@
 ## Roadmap del Proyecto
 
 ```
-FASE 1 — Telemetría LoRa               ◄── PRÓXIMO
+FASE 1 — Telemetría LoRa              ✅
 ├── 07_lora_tx/    Transmisor: sensores → paquete LoRa
 └── 08_lora_rx/    Receptor: recibe paquete → muestra en OLED + Serial
 
-FASE 2 — WiFi + NTP en Receptor
+FASE 2 — WiFi + NTP en Receptor        ✅
 └── 09_rx_wifi_ntp/   Receptor con WiFi, timestamp NTP, telemetría mejorada
 
-FASE 3 — Firebase RTDB
+FASE 3 — Firebase RTDB                 ✅
 └── 10_firebase_rtdb/  Receptor sube datos en tiempo real a Firebase
 
-FASE 4 — Dashboard Web
-└── web/               App web interactiva (sector minero/industrial)
-                       Lee Firebase RTDB, gráficos, alertas, mapas
+FASE 4 — Dashboard Web                 ✅
+└── web/               Dashboard multi-vista industrial (Ambiental/Caldera/Litio)
+                       Firebase RTDB, Chart.js, animaciones CSS
 
-FASE 5 — App Móvil
-└── app/               App móvil (React Native o Flutter)
-                       Datos en tiempo real desde Firebase
+FASE 5 — App Móvil                     ◄── EN PROGRESO
+└── app/               React Native + Expo
+                       3 vistas industriales, Firebase real-time
 ```
 
 ## Estructura del Proyecto
@@ -41,7 +41,15 @@ UCASAL_DEMO/
 ├── 06_estacion_clima/  ← BMP180 + DHT22 integrados: estación climática completa
 ├── 07_lora_tx/         ← [FASE 1] Transmisor LoRa (sensores → radio)
 ├── 08_lora_rx/         ← [FASE 1] Receptor LoRa (radio → OLED + serial)
-├── .claude/skills/     ← Skills de referencia para la placa
+├── 09_rx_wifi_ntp/     ← [FASE 2] Receptor WiFi + NTP
+├── 10_firebase_rtdb/   ← [FASE 3] Receptor → Firebase RTDB
+├── web/                ← [FASE 4] Dashboard web multi-vista industrial
+├── app/                ← [FASE 5] App móvil React Native + Expo
+│   ├── src/config/     ← Firebase config
+│   ├── src/components/ ← SensorCard, DerivedMetric
+│   ├── src/views/      ← GeneralView, CalderaView, LitioView
+│   └── src/utils/      ← Cálculos industriales derivados
+├── .claude/skills/     ← Skills de referencia (hardware, diseño, cloud)
 ├── .gitignore          ← Protección de secretos y archivos temporales
 ├── secrets.h.example   ← Plantilla para credenciales (copiar a include/secrets.h)
 └── CLAUDE.md

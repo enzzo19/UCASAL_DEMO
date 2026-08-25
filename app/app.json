@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "IITA IoT Monitor",
+    "slug": "iita-iot-monitor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ucasal.iitaiot"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0e17",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.ucasal.iitaiot"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
