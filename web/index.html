@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IITA IoT — Dashboard Industrial</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        :root {
+            --bg-primary:#0a0e17;--bg-card:#141b2d;--bg-card-hover:#1a2340;
+            --border:#1e2940;--text-primary:#e2e8f0;--text-secondary:#94a3b8;--text-muted:#64748b;
+            --accent-red:#ef4444;--accent-orange:#f97316;--accent-amber:#f59e0b;
+            --accent-green:#10b981;--accent-blue:#3b82f6;--accent-purple:#8b5cf6;--accent-cyan:#06b6d4;
+            --glow-green:rgba(16,185,129,0.15);--glow-red:rgba(239,68,68,0.15);
+            --view-accent:#f59e0b;--view-accent-rgb:245,158,11;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;}
+
+        /* ═══ HEADER ═══ */
+        .header{background:linear-gradient(135deg,#141b2d,#1a1f3a);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;}
+        .header-left{display:flex;align-items:center;gap:1rem;}
+        .logo-text{font-size:1.5rem;font-weight:800;background:linear-gradient(135deg,var(--accent-amber),var(--accent-orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+        .logo-sub{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:2px;}
+        .status-badge{display:flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:2rem;font-size:.8rem;font-weight:600;}
+        .status-badge.online{background:var(--glow-green);color:var(--accent-green);border:1px solid rgba(16,185,129,.3);}
+        .status-badge.offline{background:var(--glow-red);color:var(--accent-red);border:1px solid rgba(239,68,68,.3);}
+        .status-dot{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 2s ease-in-out infinite;}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+        .main{max-width:1400px;margin:0 auto;padding:1.5rem;display:flex;flex-direction:column;gap:1.5rem;}
+
+        /* ═══ VIEW SELECTOR ═══ */
+        .view-selector{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+        .view-card{background:var(--bg-card);border:2px solid var(--border);border-radius:14px;padding:1.1rem;cursor:pointer;transition:all .35s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden;}
+        .view-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(var(--card-accent-rgb),0.06),transparent 70%);opacity:0;transition:opacity .35s;}
+        .view-card:hover{border-color:rgba(var(--card-accent-rgb),.4);transform:translateY(-3px);}
+        .view-card:hover::before,.view-card.active::before{opacity:1;}
+        .view-card.active{border-color:rgba(var(--card-accent-rgb),.7);box-shadow:0 0 24px rgba(var(--card-accent-rgb),.15);}
+        .view-card[data-view="general"]{--card-accent-rgb:245,158,11;} .view-card[data-view="caldera"]{--card-accent-rgb:239,68,68;} .view-card[data-view="litio"]{--card-accent-rgb:6,182,212;}
+        .view-card-top{display:flex;align-items:center;gap:.75rem;margin-bottom:.4rem;position:relative;}
+        .view-card-icon{font-size:1.8rem;line-height:1;} .view-card-name{font-size:.95rem;font-weight:700;}
+        .view-card-desc{font-size:.72rem;color:var(--text-muted);line-height:1.4;position:relative;}
+        .view-card-indicator{position:absolute;top:8px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--accent-green);opacity:0;transition:opacity .3s;}
+        .view-card.active .view-card-indicator{opacity:1;}
+
+        /* ═══ INFO BAR ═══ */
+        .info-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;}
+        .info-bar .timestamp{font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--text-secondary);}
+        .info-bar .node-info{font-size:.8rem;color:var(--text-muted);}
+        .view-context-label{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .75rem;border-radius:6px;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;background:rgba(var(--view-accent-rgb),.12);color:var(--view-accent);border:1px solid rgba(var(--view-accent-rgb),.25);}
+
+        /* ═══ INDUSTRY VIEW CONTAINER ═══ */
+        .view-content{transition:opacity .3s ease;min-height:400px;}
+        .view-content.fading{opacity:.2;}
+
+        /* ═══ SHARED CARD STYLES ═══ */
+        .panel{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;transition:all .3s;}
+        .panel:hover{background:var(--bg-card-hover);}
+        .panel-title{font-size:.8rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:.75rem;}
+        .big-value{font-size:2.2rem;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1;}
+        .big-unit{font-size:.85rem;color:var(--text-secondary);font-weight:400;}
+        .metric-row{display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid rgba(30,41,64,.5);}
+        .metric-row:last-child{border-bottom:none;}
+        .metric-label{font-size:.8rem;color:var(--text-muted);}
+        .metric-value{font-family:'JetBrains Mono',monospace;font-size:.9rem;font-weight:500;}
+
+        /* ═══ GAUGE SVG ═══ */
+        .gauge-container{position:relative;width:160px;height:160px;margin:0 auto;}
+        .gauge-label{position:absolute;bottom:25px;left:50%;transform:translateX(-50%);text-align:center;}
+        .gauge-val{font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;}
+        .gauge-unit{font-size:.7rem;color:var(--text-muted);display:block;}
+
+        /* ═══ THERMOMETER ═══ */
+        .thermo{position:relative;width:40px;height:180px;margin:0 auto;}
+        .thermo-tube{position:absolute;left:50%;transform:translateX(-50%);width:16px;height:140px;top:0;background:var(--border);border-radius:8px 8px 0 0;overflow:hidden;}
+        .thermo-fill{position:absolute;bottom:0;width:100%;border-radius:0;transition:height .8s ease,background .5s;}
+        .thermo-bulb{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:36px;height:36px;border-radius:50%;border:3px solid var(--border);transition:background .5s;}
+        .thermo-marks{position:absolute;right:-28px;top:0;height:140px;display:flex;flex-direction:column;justify-content:space-between;font-size:.6rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace;}
+        .thermo-value{text-align:center;margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:700;}
+
+        /* ═══ CALDERA FIRE ═══ */
+        .fire-container{position:relative;height:50px;overflow:hidden;margin-top:.5rem;}
+        .flame{position:absolute;bottom:0;border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;animation:flicker 1.5s ease-in-out infinite alternate;}
+        @keyframes flicker{0%{transform:scaleY(1) scaleX(1) translateY(0);opacity:.9}50%{transform:scaleY(1.2) scaleX(.9) translateY(-4px);opacity:1}100%{transform:scaleY(.8) scaleX(1.1) translateY(2px);opacity:.7}}
+
+        /* ═══ LITIO POOL ═══ */
+        .pool-container{position:relative;height:120px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#0a1628 0%,#0c2d4a 40%,#0e4d6d 70%,#12667f 100%);border:1px solid var(--accent-cyan);}
+        .pool-wave{position:absolute;width:200%;height:30px;animation:wave 3s ease-in-out infinite;opacity:.3;left:-50%;}
+        .pool-wave.w1{top:35%;background:repeating-linear-gradient(90deg,transparent,transparent 40px,rgba(6,182,212,.3) 40px,rgba(6,182,212,.3) 80px);animation-duration:3s;}
+        .pool-wave.w2{top:42%;background:repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(59,130,246,.2) 60px,rgba(59,130,246,.2) 120px);animation-duration:4s;animation-delay:.5s;}
+        @keyframes wave{0%,100%{transform:translateX(0)}50%{transform:translateX(25%)}}
+        .pool-sun{position:absolute;top:8px;right:20px;width:24px;height:24px;border-radius:50%;background:var(--accent-amber);box-shadow:0 0 20px rgba(245,158,11,.5);animation:pulse 3s ease-in-out infinite;}
+        .pool-evap{position:absolute;width:3px;border-radius:2px;background:rgba(255,255,255,.15);animation:evaporate 2.5s ease-out infinite;}
+        @keyframes evaporate{0%{opacity:0;transform:translateY(0) scaleY(1)}20%{opacity:.4}80%{opacity:.15}100%{opacity:0;transform:translateY(-40px) scaleY(.3)}}
+        .pool-label{position:absolute;bottom:8px;left:12px;font-size:.65rem;color:rgba(6,182,212,.7);font-family:'JetBrains Mono',monospace;letter-spacing:1px;}
+        .pool-temp{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'JetBrains Mono',monospace;font-size:1.8rem;font-weight:700;color:#fff;text-shadow:0 0 20px rgba(6,182,212,.6);}
+
+        /* ═══ AMBIENTAL WEATHER ═══ */
+        .weather-box{position:relative;height:120px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1a2340 0%,#1e3a5f 50%,#2d4a3e 100%);border:1px solid rgba(245,158,11,.3);}
+        .weather-cloud{position:absolute;background:rgba(148,163,184,.12);border-radius:50%;filter:blur(4px);}
+        .cloud1{width:80px;height:30px;top:15px;left:15%;animation:drift 8s ease-in-out infinite;}
+        .cloud2{width:60px;height:22px;top:25px;left:55%;animation:drift 11s ease-in-out infinite reverse;}
+        @keyframes drift{0%,100%{transform:translateX(0)}50%{transform:translateX(20px)}}
+        .weather-condition{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;}
+        .weather-emoji{font-size:2.5rem;display:block;margin-bottom:.25rem;}
+        .weather-text{font-size:.75rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:1px;}
+
+        /* ═══ DERIVED METRIC CARD ═══ */
+        .derived-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center;}
+        .derived-card .d-icon{font-size:1.3rem;margin-bottom:.3rem;}
+        .derived-card .d-value{font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:700;}
+        .derived-card .d-label{font-size:.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:.2rem;}
+
+        /* ═══ PROGRESS BAR ═══ */
+        .progress-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:.5rem;}
+        .progress-fill{height:100%;border-radius:4px;transition:width .8s ease,background .5s;}
+
+        /* ═══ HAZARD STRIPE (caldera) ═══ */
+        .hazard-stripe{height:4px;background:repeating-linear-gradient(45deg,var(--accent-amber),var(--accent-amber) 8px,var(--bg-primary) 8px,var(--bg-primary) 16px);border-radius:2px;margin:.75rem 0;}
+
+        /* ═══ CHARTS ═══ */
+        .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+        .chart-container{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;}
+        .chart-title{font-size:.85rem;font-weight:600;color:var(--text-secondary);margin-bottom:1rem;text-transform:uppercase;letter-spacing:1px;}
+        .chart-wrapper{position:relative;height:200px;}
+
+        /* ═══ BOTTOM ═══ */
+        .bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+        .signal-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;}
+        .signal-title{font-size:.85rem;font-weight:600;color:var(--text-secondary);margin-bottom:1rem;text-transform:uppercase;letter-spacing:1px;}
+        .signal-row{display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid rgba(30,41,64,.5);}.signal-row:last-child{border-bottom:none;}
+        .signal-label{font-size:.8rem;color:var(--text-muted);}
+        .signal-value{font-family:'JetBrains Mono',monospace;font-size:.9rem;font-weight:500;}
+        .rssi-bar-container{display:flex;align-items:center;gap:.5rem;}.rssi-bars{display:flex;align-items:flex-end;gap:3px;height:20px;}
+        .rssi-bar{width:6px;border-radius:2px;background:var(--border);transition:background .3s;}.rssi-bar.active{background:var(--accent-green);}
+        .rssi-bar:nth-child(1){height:5px;}.rssi-bar:nth-child(2){height:9px;}.rssi-bar:nth-child(3){height:13px;}.rssi-bar:nth-child(4){height:17px;}.rssi-bar:nth-child(5){height:20px;}
+        .alerts-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;}
+        .alert-item{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;font-size:.85rem;border-bottom:1px solid rgba(30,41,64,.5);}.alert-item:last-child{border-bottom:none;}
+        .alert-icon{font-size:1rem;} .alert-ok{color:var(--accent-green);} .alert-warn{color:var(--accent-amber);} .alert-crit{color:var(--accent-red);}
+
+        /* ═══ OVERLAY ═══ */
+        .overlay{position:fixed;inset:0;background:rgba(10,14,23,.95);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1.5rem;z-index:100;transition:opacity .5s;}
+        .overlay.hidden{opacity:0;pointer-events:none;}
+        .spinner{width:48px;height:48px;border:4px solid var(--border);border-top-color:var(--accent-amber);border-radius:50%;animation:spin .8s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .overlay-text{font-size:1.1rem;color:var(--text-secondary);}
+
+        /* ═══ RESPONSIVE ═══ */
+        @media(max-width:900px){.charts-grid,.bottom-grid{grid-template-columns:1fr;}.header{padding:1rem;}.main{padding:1rem;}}
+        @media(max-width:700px){.view-selector{grid-template-columns:1fr;}}
+        @media(max-width:600px){.big-value{font-size:1.6rem;}.logo-text{font-size:1.2rem;}}
+    </style>
+</head>
+<body>
+
+<div class="overlay" id="overlay"><div class="spinner"></div><div class="overlay-text">Conectando a Firebase RTDB...</div></div>
+
+<header class="header">
+    <div class="header-left">
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAACLElEQVR4nO2YsW7DQAxDPadA1/59/9J7tsDV6ShS0qW9wsANgRNTfKLkpD3O74+tz/HrDnoAHp9f1+NeVM+rRlEH6x+zMvXySwH8Eep10A5wVXNGyK1XMbEIwLi1O9DI0AUw2guWeCycs9ICwD6FwgcRWJU3JDCeh3kKAcdpht4dmPlxdqArhzrArPcCQIWhCIDdIwB+p7G5xhEqAWAGsoVAXIpiCoCbmguhBUAeIT7EkMF8oB4jtcQ5AJybC6BuyFhOAMAhMgAzGBJgJnWCb2IVYFQAVaVxAvCn+2uULBmGQAoyaYyoaITSAJIO797VZHeA6U0IQC6G22+QBgXAt4QE4PMhS5cAwkZK6eXGyX4TV9yrAGELtAT4TpBtIz25IvyN6P9C0gHOEklWAVQYfGN9GksA6ZMGkPRvgAUAJMwPgH3PsaL3ZHdvgAvACumX8tLW3AB/HCBkA7erACpqDBCGY7QkAFdhSQL1dxMADIwA4H4At78OEDJQAKDN/I0qADlOLADwF7o3AG5u5vX7AMjG4zZfAcbrAkALw8yoqcoAhO4dgNVRGH/NAO50SlGqAOQKVXeAEZopuABMyFLFKQBv/Z8AzGavDoCv+wAJ94sAgKUNALCfZoDGHSDN7AEQVuxZYlC7AsAUbQDA5V2puvs2gNBBDoAvHf9JmXOfHiE1+fxPCbKLPABvvQGAH+LTe67X3bMAuQl2AbompyGBBEC7ewuw7pC06bM9wBMZvk5Zd3TomgAAAABJRU5ErkJggg==" alt="IITA" style="width:48px;height:48px;image-rendering:pixelated;border-radius:6px;">
+        <div><div class="logo-text">IITA IoT</div><div class="logo-sub">Plataforma de Monitoreo Industrial</div></div>
+    </div>
+    <div class="status-badge offline" id="statusBadge"><div class="status-dot"></div><span id="statusText">Desconectado</span></div>
+</header>
+
+<div class="main">
+    <!-- VIEW SELECTOR -->
+    <div class="view-selector">
+        <div class="view-card active" data-view="general" onclick="switchView('general')">
+            <div class="view-card-indicator"></div>
+            <div class="view-card-top"><span class="view-card-icon">🌍</span><span class="view-card-name">Monitoreo Ambiental</span></div>
+            <div class="view-card-desc">Estación climática — confort, punto de rocío, condiciones meteorológicas en campo</div>
+        </div>
+        <div class="view-card" data-view="caldera" onclick="switchView('caldera')">
+            <div class="view-card-indicator"></div>
+            <div class="view-card-top"><span class="view-card-icon">🏭</span><span class="view-card-name">Caldera Industrial</span></div>
+            <div class="view-card-desc">Caldera de vapor — presión de cámara, temperatura de gases, zona operativa y alertas de seguridad</div>
+        </div>
+        <div class="view-card" data-view="litio" onclick="switchView('litio')">
+            <div class="view-card-indicator"></div>
+            <div class="view-card-top"><span class="view-card-icon">⚗️</span><span class="view-card-name">Planta de Litio</span></div>
+            <div class="view-card-desc">Salmuera — tasa de evaporación, concentración Li₂CO₃, monitoreo de pileta y rendimiento</div>
+        </div>
+    </div>
+
+    <!-- INFO BAR -->
+    <div class="info-bar">
+        <div class="timestamp">Última actualización: <span id="lastUpdate">--</span></div>
+        <div style="display:flex;align-items:center;gap:.75rem;">
+            <span class="view-context-label" id="viewLabel">🌍 AMBIENTAL</span>
+            <div class="node-info">Node <span id="nodeId">--</span> | Seq <span id="seqNum">--</span> | UCASAL 2026</div>
+        </div>
+    </div>
+
+    <!-- DYNAMIC VIEW CONTENT -->
+    <div class="view-content" id="viewContent"></div>
+
+    <!-- CHARTS (shared) -->
+    <div class="charts-grid">
+        <div class="chart-container">
+            <div class="chart-title" id="chartTitle1">📈 Temperatura & Humedad</div>
+            <div class="chart-wrapper"><canvas id="chartTH"></canvas></div>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title" id="chartTitle2">📈 Presión Atmosférica</div>
+            <div class="chart-wrapper"><canvas id="chartP"></canvas></div>
+        </div>
+    </div>
+
+    <!-- SIGNAL + ALERTS -->
+    <div class="bottom-grid">
+        <div class="signal-panel">
+            <div class="signal-title">📡 Señal LoRa & Conexión</div>
+            <div class="signal-row"><span class="signal-label">RSSI</span><div class="rssi-bar-container"><div class="rssi-bars" id="rssiBars"><div class="rssi-bar"></div><div class="rssi-bar"></div><div class="rssi-bar"></div><div class="rssi-bar"></div><div class="rssi-bar"></div></div><span class="signal-value" id="valRSSI">-- dBm</span></div></div>
+            <div class="signal-row"><span class="signal-label">SNR</span><span class="signal-value" id="valSNR">-- dB</span></div>
+            <div class="signal-row"><span class="signal-label">Paquetes RX</span><span class="signal-value" id="valPktRX">--</span></div>
+            <div class="signal-row"><span class="signal-label">Paquetes Perdidos</span><span class="signal-value" id="valPktLost">--</span></div>
+            <div class="signal-row"><span class="signal-label">Tasa de Pérdida</span><span class="signal-value" id="valLossRate">--%</span></div>
+        </div>
+        <div class="alerts-panel">
+            <div class="signal-title">⚠️ Estado & Alertas</div>
+            <div id="alertList"><div class="alert-item"><span class="alert-icon">⏳</span><span style="color:var(--text-muted)">Esperando datos...</span></div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  DERIVED CALCULATIONS
+// ═══════════════════════════════════════════════
+function dewPoint(t, rh) {
+    const a = 17.27, b = 237.7;
+    const alpha = (a * t) / (b + t) + Math.log(rh / 100);
+    return (b * alpha) / (a - alpha);
+}
+
+function heatIndex(t, rh) {
+    if (t < 27) return t;
+    let hi = -8.7847 + 1.6114*t + 2.3385*rh - 0.1461*t*rh - 0.0123*t*t - 0.0164*rh*rh + 0.0022*t*t*rh + 0.0007*t*rh*rh - 0.0000036*t*t*rh*rh;
+    return hi;
+}
+
+function comfortIndex(t, rh) {
+    if (t >= 20 && t <= 26 && rh >= 30 && rh <= 60) return { level: 'Confortable', color: '#10b981', pct: 90 };
+    if (t >= 17 && t <= 30 && rh >= 20 && rh <= 70) return { level: 'Aceptable', color: '#f59e0b', pct: 60 };
+    return { level: 'Incómodo', color: '#ef4444', pct: 30 };
+}
+
+function weatherCondition(t, rh) {
+    if (rh > 85 && t > 20) return { emoji: '🌧️', text: 'Húmedo / Lluvioso' };
+    if (rh > 85) return { emoji: '🌫️', text: 'Niebla / Bruma' };
+    if (t > 35) return { emoji: '🔥', text: 'Calor Extremo' };
+    if (t > 28) return { emoji: '☀️', text: 'Caluroso' };
+    if (t > 20) return { emoji: '🌤️', text: 'Templado' };
+    if (t > 10) return { emoji: '🌥️', text: 'Fresco' };
+    if (t > 0) return { emoji: '❄️', text: 'Frío' };
+    return { emoji: '🥶', text: 'Helada' };
+}
+
+function evapRate(t, rh, p, alt) {
+    // Simplified Penman estimation (mm/day) adapted for brine
+    const es = 6.108 * Math.exp((17.27 * t) / (t + 237.3)); // saturation vapor pressure
+    const ea = es * (rh / 100);
+    const vpd = es - ea; // vapor pressure deficit
+    const altFactor = 1 + (alt / 5000) * 0.15; // higher altitude = faster evap
+    const rate = (vpd * 0.45 * altFactor) / (p / 1013.25);
+    return Math.max(0, rate);
+}
+
+function brineConcentration(t, rh) {
+    // Simulated Li concentration based on evaporation conditions
+    const base = 1.8; // base % Li
+    const tempBoost = Math.max(0, (t - 15) * 0.02);
+    const humBoost = Math.max(0, (60 - rh) * 0.01);
+    return (base + tempBoost + humBoost).toFixed(2);
+}
+
+function boilerZone(t, p) {
+    if (t > 50 || p > 940) return { zone: 'PELIGRO', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.4)' };
+    if (t > 38 || p > 910) return { zone: 'PRECAUCIÓN', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.4)' };
+    return { zone: 'NORMAL', color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.4)' };
+}
+
+function steamEfficiency(t, p, rh) {
+    // Simulated efficiency based on conditions
+    const base = 85;
+    const tempPenalty = t > 40 ? (t - 40) * 0.5 : 0;
+    const presPenalty = p > 920 ? (p - 920) * 0.1 : 0;
+    const humPenalty = rh > 70 ? (rh - 70) * 0.2 : 0;
+    return Math.max(50, Math.min(99, base - tempPenalty - presPenalty - humPenalty)).toFixed(1);
+}
+
+// ═══════════════════════════════════════════════
+//  VIEW RENDERERS
+// ═══════════════════════════════════════════════
+function renderGeneral(d) {
+    const dp = dewPoint(d.temperatura, d.humedad).toFixed(1);
+    const comfort = comfortIndex(d.temperatura, d.humedad);
+    const weather = weatherCondition(d.temperatura, d.humedad);
+    const hi = heatIndex(d.temperatura, d.humedad).toFixed(1);
+
+    return `
+    <!-- Weather Visualization -->
+    <div class="weather-box">
+        <div class="weather-cloud cloud1"></div>
+        <div class="weather-cloud cloud2"></div>
+        <div class="weather-condition">
+            <span class="weather-emoji">${weather.emoji}</span>
+            <span class="weather-text">${weather.text}</span>
+        </div>
+    </div>
+
+    <!-- Primary Metrics -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem;">
+        <div class="panel" style="text-align:center;">
+            <div class="panel-title">🌡️ Temperatura</div>
+            <div class="big-value" style="color:var(--accent-orange);">${d.temperatura?.toFixed(1) ?? '--'}<span class="big-unit"> °C</span></div>
+            <div style="margin-top:.5rem;font-size:.75rem;color:var(--text-muted);">Sensación: ${hi}°C</div>
+        </div>
+        <div class="panel" style="text-align:center;">
+            <div class="panel-title">💧 Humedad Relativa</div>
+            <div class="big-value" style="color:var(--accent-blue);">${d.humedad?.toFixed(1) ?? '--'}<span class="big-unit"> %</span></div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${d.humedad}%;background:${d.humedad>80?'var(--accent-red)':d.humedad>60?'var(--accent-amber)':'var(--accent-blue)'};"></div></div>
+        </div>
+        <div class="panel" style="text-align:center;">
+            <div class="panel-title">📊 Presión Atmosférica</div>
+            <div class="big-value" style="color:var(--accent-purple);">${d.presion?.toFixed(1) ?? '--'}<span class="big-unit"> hPa</span></div>
+            <div style="margin-top:.5rem;font-size:.75rem;color:var(--text-muted);">Altitud: ${Math.round(d.altitud)}m</div>
+        </div>
+    </div>
+
+    <!-- Derived Metrics -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-top:1rem;">
+        <div class="derived-card">
+            <div class="d-icon">🎯</div>
+            <div class="d-value" style="color:${comfort.color};">${comfort.level}</div>
+            <div class="d-label">Índice de Confort</div>
+            <div class="progress-bar" style="margin-top:.4rem;"><div class="progress-fill" style="width:${comfort.pct}%;background:${comfort.color};"></div></div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">💦</div>
+            <div class="d-value" style="color:var(--accent-cyan);">${dp}°</div>
+            <div class="d-label">Punto de Rocío</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">⛰️</div>
+            <div class="d-value" style="color:var(--accent-green);">${Math.round(d.altitud)}<span style="font-size:.7rem;">m</span></div>
+            <div class="d-label">Altitud</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">🔋</div>
+            <div class="d-value" style="color:${d.bateria_mV<3300?'var(--accent-amber)':'var(--accent-green)'};">${d.bateria_mV}<span style="font-size:.7rem;">mV</span></div>
+            <div class="d-label">Batería Nodo</div>
+        </div>
+    </div>`;
+}
+
+function renderCaldera(d) {
+    const zone = boilerZone(d.temperatura, d.presion);
+    const eff = steamEfficiency(d.temperatura, d.presion, d.humedad);
+    const tempPct = Math.min(100, Math.max(0, ((d.temperatura - 0) / 60) * 100));
+    const presPct = Math.min(100, Math.max(0, ((d.presion - 850) / 100) * 100));
+
+    // Gauge SVG for pressure
+    const gaugeAngle = (presPct / 100) * 240; // 240 degree arc
+    const gaugeColor = d.presion > 930 ? '#ef4444' : d.presion > 910 ? '#f59e0b' : '#10b981';
+
+    return `
+    <!-- Hazard Stripe -->
+    <div class="hazard-stripe"></div>
+
+    <!-- Zone Banner -->
+    <div class="panel" style="border-color:${zone.border};background:${zone.bg};text-align:center;padding:1rem;">
+        <div style="font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:2px;">Zona Operativa</div>
+        <div style="font-size:1.8rem;font-weight:800;color:${zone.color};font-family:'JetBrains Mono',monospace;margin:.25rem 0;">${zone.zone}</div>
+        <div style="font-size:.75rem;color:var(--text-secondary);">Eficiencia de vapor: <strong style="color:${parseFloat(eff)>80?'var(--accent-green)':'var(--accent-amber)'}">${eff}%</strong></div>
+    </div>
+
+    <!-- Thermometer + Gauge + Metrics -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem;">
+        <!-- Thermometer -->
+        <div class="panel" style="text-align:center;">
+            <div class="panel-title">♨️ Temp. Cámara</div>
+            <div class="thermo">
+                <div class="thermo-tube">
+                    <div class="thermo-fill" style="height:${tempPct}%;background:${d.temperatura>45?'#ef4444':d.temperatura>35?'#f97316':'#f59e0b'};"></div>
+                </div>
+                <div class="thermo-bulb" style="background:${d.temperatura>45?'#ef4444':d.temperatura>35?'#f97316':'#f59e0b'};"></div>
+                <div class="thermo-marks"><span>60°</span><span>45°</span><span>30°</span><span>15°</span><span>0°</span></div>
+            </div>
+            <div class="thermo-value" style="color:${d.temperatura>45?'#ef4444':'var(--accent-orange)'};">${d.temperatura?.toFixed(1)}°C</div>
+        </div>
+
+        <!-- Pressure Gauge -->
+        <div class="panel" style="text-align:center;">
+            <div class="panel-title">⚙️ Presión Vapor</div>
+            <div class="gauge-container">
+                <svg viewBox="0 0 160 160" style="width:100%;height:100%;">
+                    <!-- Background arc -->
+                    <path d="M 30 130 A 65 65 0 1 1 130 130" fill="none" stroke="var(--border)" stroke-width="12" stroke-linecap="round"/>
+                    <!-- Value arc -->
+                    <path d="M 30 130 A 65 65 0 1 1 130 130" fill="none" stroke="${gaugeColor}" stroke-width="12" stroke-linecap="round"
+                        stroke-dasharray="${gaugeAngle * 1.15} 999" style="transition:stroke-dasharray .8s ease,stroke .5s;"/>
+                    <!-- Zone marks -->
+                    <circle cx="80" cy="80" r="45" fill="none" stroke="rgba(30,41,64,.3)" stroke-width="1"/>
+                    <!-- Center text -->
+                    <text x="80" y="90" text-anchor="middle" fill="${gaugeColor}" font-family="JetBrains Mono" font-size="22" font-weight="700">${d.presion?.toFixed(0)}</text>
+                    <text x="80" y="108" text-anchor="middle" fill="var(--text-muted)" font-family="Inter" font-size="10">hPa</text>
+                    <!-- Min/Max labels -->
+                    <text x="25" y="145" fill="var(--text-muted)" font-family="JetBrains Mono" font-size="9">850</text>
+                    <text x="120" y="145" fill="var(--text-muted)" font-family="JetBrains Mono" font-size="9">950</text>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Chimney / Heat Index -->
+        <div class="panel">
+            <div class="panel-title">🔥 Temp. Chimenea</div>
+            <div style="text-align:center;margin:1rem 0;">
+                <div class="big-value" style="color:var(--accent-amber);">${d.sens_termica?.toFixed(1)}<span class="big-unit">°C</span></div>
+            </div>
+            <!-- Fire animation -->
+            <div class="fire-container">
+                <div class="flame" style="left:20%;width:20px;height:30px;background:radial-gradient(ellipse,#f97316,#ef4444);animation-delay:0s;"></div>
+                <div class="flame" style="left:40%;width:16px;height:24px;background:radial-gradient(ellipse,#fbbf24,#f97316);animation-delay:.3s;"></div>
+                <div class="flame" style="left:60%;width:22px;height:32px;background:radial-gradient(ellipse,#f97316,#dc2626);animation-delay:.6s;"></div>
+                <div class="flame" style="left:75%;width:14px;height:20px;background:radial-gradient(ellipse,#fbbf24,#f97316);animation-delay:.9s;"></div>
+            </div>
+            <div class="metric-row"><span class="metric-label">Humedad Sala</span><span class="metric-value" style="color:var(--accent-blue);">${d.humedad?.toFixed(1)}%</span></div>
+            <div class="metric-row"><span class="metric-label">Batería Nodo</span><span class="metric-value">${d.bateria_mV} mV</span></div>
+        </div>
+    </div>
+
+    <div class="hazard-stripe"></div>
+
+    <!-- Secondary derived metrics -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;">
+        <div class="derived-card">
+            <div class="d-icon">🎯</div>
+            <div class="d-value" style="color:${zone.color};">${zone.zone}</div>
+            <div class="d-label">Zona Operativa</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">⚡</div>
+            <div class="d-value" style="color:${parseFloat(eff)>80?'var(--accent-green)':'var(--accent-amber)'}">${eff}%</div>
+            <div class="d-label">Eficiencia Vapor</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">📏</div>
+            <div class="d-value" style="color:var(--accent-green);">${Math.round(d.altitud)}<span style="font-size:.7rem;">cm</span></div>
+            <div class="d-label">Nivel Tanque</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">🔋</div>
+            <div class="d-value" style="color:${d.bateria_mV<3300?'var(--accent-amber)':'var(--accent-green)'};">${d.bateria_mV}<span style="font-size:.7rem;">mV</span></div>
+            <div class="d-label">Batería Nodo</div>
+        </div>
+    </div>`;
+}
+
+function renderLitio(d) {
+    const evap = evapRate(d.temperatura, d.humedad, d.presion, d.altitud).toFixed(2);
+    const conc = brineConcentration(d.temperatura, d.humedad);
+    const evapQuality = parseFloat(evap) > 3 ? 'Óptima' : parseFloat(evap) > 1.5 ? 'Moderada' : 'Lenta';
+    const evapColor = parseFloat(evap) > 3 ? '#10b981' : parseFloat(evap) > 1.5 ? '#f59e0b' : '#ef4444';
+    const satPct = Math.min(100, (parseFloat(conc) / 3.5) * 100);
+
+    // Evap particle positions
+    let evapParticles = '';
+    for (let i = 0; i < 8; i++) {
+        const left = 10 + (i * 11);
+        const delay = (i * 0.35).toFixed(1);
+        const h = 8 + Math.random() * 12;
+        evapParticles += `<div class="pool-evap" style="left:${left}%;top:40%;height:${h}px;animation-delay:${delay}s;"></div>`;
+    }
+
+    return `
+    <!-- Brine Pool Visualization -->
+    <div class="pool-container">
+        <div class="pool-sun"></div>
+        <div class="pool-wave w1"></div>
+        <div class="pool-wave w2"></div>
+        ${evapParticles}
+        <div class="pool-temp">${d.temperatura?.toFixed(1)}°C</div>
+        <div class="pool-label">▼ PILETA DE SALMUERA — Li₂CO₃ ▼</div>
+    </div>
+
+    <!-- Primary Metrics: Evaporation Focus -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem;">
+        <!-- Evaporation Rate -->
+        <div class="panel" style="text-align:center;border-color:rgba(6,182,212,.3);">
+            <div class="panel-title">☀️ Tasa de Evaporación</div>
+            <div class="big-value" style="color:${evapColor};">${evap}<span class="big-unit"> mm/día</span></div>
+            <div style="margin-top:.5rem;font-size:.75rem;color:${evapColor};font-weight:600;">${evapQuality}</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,parseFloat(evap)*15)}%;background:${evapColor};"></div></div>
+        </div>
+
+        <!-- Concentration -->
+        <div class="panel" style="text-align:center;border-color:rgba(6,182,212,.3);">
+            <div class="panel-title">🧪 Concentración Li</div>
+            <div class="big-value" style="color:var(--accent-cyan);">${conc}<span class="big-unit"> %</span></div>
+            <div style="margin-top:.5rem;font-size:.75rem;color:var(--text-muted);">Saturación: ${satPct.toFixed(0)}%</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${satPct}%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue));"></div></div>
+        </div>
+
+        <!-- Ambient Humidity -->
+        <div class="panel" style="text-align:center;border-color:rgba(6,182,212,.3);">
+            <div class="panel-title">💧 Humedad Ambiente</div>
+            <div class="big-value" style="color:var(--accent-blue);">${d.humedad?.toFixed(1)}<span class="big-unit"> %</span></div>
+            <div style="margin-top:.5rem;font-size:.75rem;color:${d.humedad<30?'var(--accent-green)':'var(--accent-amber)'};">${d.humedad<30?'Favorable para evaporación':d.humedad<60?'Evaporación moderada':'Evaporación limitada'}</div>
+        </div>
+    </div>
+
+    <!-- Secondary Metrics & Derived -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-top:1rem;">
+        <div class="derived-card">
+            <div class="d-icon">🌡️</div>
+            <div class="d-value" style="color:var(--accent-orange);">${d.temperatura?.toFixed(1)}°</div>
+            <div class="d-label">Temp. Salmuera</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">📊</div>
+            <div class="d-value" style="color:var(--accent-purple);">${d.presion?.toFixed(0)}</div>
+            <div class="d-label">Presión hPa</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">🏔️</div>
+            <div class="d-value" style="color:var(--accent-green);">${Math.round(d.altitud)}m</div>
+            <div class="d-label">Altitud Planta</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">☀️</div>
+            <div class="d-value" style="color:var(--accent-amber);">${d.sens_termica?.toFixed(1)}°</div>
+            <div class="d-label">Temp. Evaporación</div>
+        </div>
+        <div class="derived-card">
+            <div class="d-icon">🔋</div>
+            <div class="d-value" style="color:${d.bateria_mV<3300?'var(--accent-amber)':'var(--accent-green)'};">${d.bateria_mV}</div>
+            <div class="d-label">Batería mV</div>
+        </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════
+//  VIEW MANAGEMENT
+// ═══════════════════════════════════════════════
+let currentView = 'general';
+let lastData = null;
+
+function switchView(viewId) {
+    if (viewId === currentView) return;
+    currentView = viewId;
+
+    const content = document.getElementById('viewContent');
+    content.classList.add('fading');
+
+    setTimeout(() => {
+        if (lastData) updateView(lastData);
+        content.classList.remove('fading');
+    }, 250);
+
+    // Update selector
+    document.querySelectorAll('.view-card').forEach(c => c.classList.toggle('active', c.dataset.view === viewId));
+
+    // Update accent colors
+    const accents = { general: ['#f59e0b','245,158,11'], caldera: ['#ef4444','239,68,68'], litio: ['#06b6d4','6,182,212'] };
+    document.documentElement.style.setProperty('--view-accent', accents[viewId][0]);
+    document.documentElement.style.setProperty('--view-accent-rgb', accents[viewId][1]);
+
+    // Update labels
+    const labels = { general: '🌍 AMBIENTAL', caldera: '🏭 CALDERA', litio: '⚗️ LITIO' };
+    document.getElementById('viewLabel').textContent = labels[viewId];
+
+    // Update chart titles
+    const titles = {
+        general: ['📈 Temperatura & Humedad', '📈 Presión Atmosférica'],
+        caldera: ['📈 Temp. Cámara & Humedad Sala', '📈 Presión de Vapor'],
+        litio: ['📈 Temp. Salmuera & Humedad Amb.', '📈 Presión Atmosférica (Evaporación)']
+    };
+    document.getElementById('chartTitle1').textContent = titles[viewId][0];
+    document.getElementById('chartTitle2').textContent = titles[viewId][1];
+
+    // Re-run alerts
+    if (lastData) updateAlerts(lastData);
+}
+
+function updateView(d) {
+    const container = document.getElementById('viewContent');
+    switch (currentView) {
+        case 'general': container.innerHTML = renderGeneral(d); break;
+        case 'caldera': container.innerHTML = renderCaldera(d); break;
+        case 'litio':   container.innerHTML = renderLitio(d); break;
+    }
+}
+
+// ═══════════════════════════════════════════════
+//  FIREBASE
+// ═══════════════════════════════════════════════
+const firebaseConfig = {
+    apiKey: "AIzaSyCRQ6tFUCTiMN4L_ulNRTDMSdJhVmKcvog",
+    databaseURL: "https://ucasal-demo-iot-default-rtdb.firebaseio.com"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const MAX_POINTS = 100;
+const histLabels=[], histTemp=[], histHum=[], histPres=[];
+
+const chartOptions = {
+    responsive:true, maintainAspectRatio:false, animation:{duration:300},
+    plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}}},
+    scales:{x:{ticks:{color:'#64748b',maxTicksLimit:8,font:{size:10}},grid:{color:'rgba(30,41,64,0.5)'}}}
+};
+
+const chartTH = new Chart(document.getElementById('chartTH').getContext('2d'), {
+    type:'line', data:{labels:histLabels, datasets:[
+        {label:'Temperatura (°C)',data:histTemp,borderColor:'#f97316',backgroundColor:'rgba(249,115,22,0.1)',borderWidth:2,pointRadius:0,tension:.3,fill:true,yAxisID:'y'},
+        {label:'Humedad (%)',data:histHum,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.1)',borderWidth:2,pointRadius:0,tension:.3,fill:true,yAxisID:'y1'}
+    ]},
+    options:{...chartOptions,scales:{...chartOptions.scales,
+        y:{position:'left',ticks:{color:'#f97316',font:{size:10}},grid:{color:'rgba(30,41,64,0.5)'},title:{display:true,text:'°C',color:'#f97316'}},
+        y1:{position:'right',ticks:{color:'#3b82f6',font:{size:10}},grid:{drawOnChartArea:false},title:{display:true,text:'%',color:'#3b82f6'}}
+    }}
+});
+
+const chartP = new Chart(document.getElementById('chartP').getContext('2d'), {
+    type:'line', data:{labels:histLabels, datasets:[
+        {label:'Presión (hPa)',data:histPres,borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,0.1)',borderWidth:2,pointRadius:0,tension:.3,fill:true}
+    ]},
+    options:{...chartOptions,scales:{...chartOptions.scales,
+        y:{ticks:{color:'#8b5cf6',font:{size:10}},grid:{color:'rgba(30,41,64,0.5)'},title:{display:true,text:'hPa',color:'#8b5cf6'}}
+    }}
+});
+
+function updateRSSIBars(rssi){let l=0;if(rssi>-60)l=5;else if(rssi>-70)l=4;else if(rssi>-85)l=3;else if(rssi>-100)l=2;else if(rssi>-115)l=1;document.querySelectorAll('#rssiBars .rssi-bar').forEach((b,i)=>b.classList.toggle('active',i<l));}
+
+// ═══════════════════════════════════════════════
+//  ALERTS (view-aware)
+// ═══════════════════════════════════════════════
+function updateAlerts(data) {
+    const alerts = [];
+    const v = currentView;
+
+    if (v === 'general') {
+        const comfort = comfortIndex(data.temperatura, data.humedad);
+        alerts.push({ icon: comfort.pct > 70 ? '✅' : '🟡', text: `Confort: ${comfort.level}`, cls: comfort.pct > 70 ? 'alert-ok' : 'alert-warn' });
+        if (data.temperatura > 35) alerts.push({ icon: '🔴', text: `Temperatura extrema: ${data.temperatura}°C`, cls: 'alert-crit' });
+        else alerts.push({ icon: '✅', text: `Temperatura: ${data.temperatura}°C`, cls: 'alert-ok' });
+        const dp = dewPoint(data.temperatura, data.humedad);
+        if (dp > data.temperatura - 2) alerts.push({ icon: '🟡', text: `Punto de rocío cercano: ${dp.toFixed(1)}°C — riesgo de condensación`, cls: 'alert-warn' });
+    } else if (v === 'caldera') {
+        const zone = boilerZone(data.temperatura, data.presion);
+        alerts.push({ icon: zone.zone === 'NORMAL' ? '✅' : zone.zone === 'PRECAUCIÓN' ? '🟡' : '🔴', text: `Zona operativa: ${zone.zone}`, cls: zone.zone === 'NORMAL' ? 'alert-ok' : zone.zone === 'PRECAUCIÓN' ? 'alert-warn' : 'alert-crit' });
+        if (data.temperatura > 50) alerts.push({ icon: '🔴', text: `¡TEMP. CÁMARA CRÍTICA! ${data.temperatura}°C`, cls: 'alert-crit' });
+        else if (data.temperatura > 38) alerts.push({ icon: '🟡', text: `Temp. cámara elevada: ${data.temperatura}°C`, cls: 'alert-warn' });
+        else alerts.push({ icon: '✅', text: `Temp. cámara normal: ${data.temperatura}°C`, cls: 'alert-ok' });
+        if (data.presion > 930) alerts.push({ icon: '🔴', text: `¡PRESIÓN VAPOR ALTA! ${data.presion} hPa`, cls: 'alert-crit' });
+        else if (data.presion > 910) alerts.push({ icon: '🟡', text: `Presión vapor elevada: ${data.presion} hPa`, cls: 'alert-warn' });
+        const eff = steamEfficiency(data.temperatura, data.presion, data.humedad);
+        alerts.push({ icon: parseFloat(eff) > 80 ? '✅' : '🟡', text: `Eficiencia de vapor: ${eff}%`, cls: parseFloat(eff) > 80 ? 'alert-ok' : 'alert-warn' });
+    } else if (v === 'litio') {
+        const evap = evapRate(data.temperatura, data.humedad, data.presion, data.altitud);
+        if (evap > 3) alerts.push({ icon: '✅', text: `Evaporación óptima: ${evap.toFixed(2)} mm/día`, cls: 'alert-ok' });
+        else if (evap > 1.5) alerts.push({ icon: '🟡', text: `Evaporación moderada: ${evap.toFixed(2)} mm/día`, cls: 'alert-warn' });
+        else alerts.push({ icon: '🔴', text: `Evaporación lenta: ${evap.toFixed(2)} mm/día`, cls: 'alert-crit' });
+        if (data.humedad > 60) alerts.push({ icon: '🟡', text: `Humedad alta ${data.humedad}% — limita evaporación`, cls: 'alert-warn' });
+        else if (data.humedad < 30) alerts.push({ icon: '✅', text: `Humedad baja ${data.humedad}% — favorable`, cls: 'alert-ok' });
+        if (data.temperatura > 45) alerts.push({ icon: '🟡', text: `Temp. salmuera alta: ${data.temperatura}°C`, cls: 'alert-warn' });
+        const conc = brineConcentration(data.temperatura, data.humedad);
+        alerts.push({ icon: 'ℹ️', text: `Concentración Li estimada: ${conc}%`, cls: 'alert-ok' });
+        alerts.push({ icon: 'ℹ️', text: `Altitud ${Math.round(data.altitud)}m → presión ${data.presion?.toFixed(0)} hPa`, cls: 'alert-ok' });
+    }
+
+    // Common
+    if (data.bateria_mV < 3000) alerts.push({ icon: '🔴', text: `Batería BAJA: ${data.bateria_mV} mV`, cls: 'alert-crit' });
+    else if (data.bateria_mV < 3300) alerts.push({ icon: '🟡', text: `Batería media: ${data.bateria_mV} mV`, cls: 'alert-warn' });
+    if (data.rssi_lora < -100) alerts.push({ icon: '🟡', text: `Señal LoRa débil: ${data.rssi_lora} dBm`, cls: 'alert-warn' });
+
+    document.getElementById('alertList').innerHTML = alerts.map(a => `<div class="alert-item"><span class="alert-icon">${a.icon}</span><span class="${a.cls}">${a.text}</span></div>`).join('');
+}
+
+// ═══════════════════════════════════════════════
+//  DATA PROCESSING
+// ═══════════════════════════════════════════════
+const ref = db.ref('/actual');
+let lastTimestamp = null, updateCount = 0;
+
+function processData(data) {
+    if (!data) return;
+    if (data.timestamp === lastTimestamp) return;
+    lastTimestamp = data.timestamp;
+    updateCount++;
+    lastData = data;
+
+    document.getElementById('overlay').classList.add('hidden');
+    document.getElementById('statusBadge').className = 'status-badge online';
+    document.getElementById('statusText').textContent = 'En Vivo';
+    document.getElementById('lastUpdate').textContent = data.fecha_hora || '--';
+    document.getElementById('nodeId').textContent = data.node_id || '1';
+    document.getElementById('seqNum').textContent = data.paquetes_rx || '--';
+
+    // Signal
+    document.getElementById('valRSSI').textContent = `${data.rssi_lora ?? '--'} dBm`;
+    document.getElementById('valSNR').textContent = `${(data.snr_lora ?? 0).toFixed?.(1) ?? data.snr_lora} dB`;
+    document.getElementById('valPktRX').textContent = data.paquetes_rx ?? '--';
+    document.getElementById('valPktLost').textContent = data.paquetes_perdidos ?? '--';
+    const rx=data.paquetes_rx||0, lost=data.paquetes_perdidos||0, total=rx+lost;
+    document.getElementById('valLossRate').textContent = `${total>0?((lost/total)*100).toFixed(1):'0.0'}%`;
+    updateRSSIBars(data.rssi_lora || -120);
+
+    // Update view
+    updateView(data);
+    updateAlerts(data);
+
+    // Charts
+    const label = new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    histLabels.push(label); histTemp.push(data.temperatura); histHum.push(data.humedad); histPres.push(data.presion);
+    if (histLabels.length > MAX_POINTS) { histLabels.shift(); histTemp.shift(); histHum.shift(); histPres.shift(); }
+    chartTH.update('none'); chartP.update('none');
+}
+
+ref.on('value', snap => processData(snap.val()));
+setInterval(() => ref.get().then(snap => processData(snap.val())), 3000);
+
+db.ref('.info/connected').on('value', snap => {
+    const badge = document.getElementById('statusBadge');
+    if (snap.val()) { badge.className='status-badge online'; document.getElementById('statusText').textContent='En Vivo'; }
+    else { badge.className='status-badge offline'; document.getElementById('statusText').textContent='Desconectado'; }
+});
+</script>
+</body>
+</html>

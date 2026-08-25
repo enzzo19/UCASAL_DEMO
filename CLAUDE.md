@@ -106,15 +106,26 @@ struct TelemetriaPacket {
 
 ## Skills Disponibles
 Las siguientes skills están en `.claude/skills/`:
+
+### Hardware & Firmware
 - `heltec-board` — Pinout completo, GPIOs, limitaciones de hardware
 - `heltec-lora` — Comunicación LoRa (RadioLib, telemetría, parámetros)
 - `heltec-display` — Pantalla OLED SSD1306 (U8g2, gráficos, UI)
 - `heltec-wifi` — WiFi, HTTP, MQTT, WebSocket, BLE, OTA
 - `heltec-power` — Deep sleep, batería, optimización de consumo
 - `heltec-setup` — PlatformIO config, compilación, troubleshooting
+
+### Seguridad
 - `security-repo` — Gestión de secretos, API keys, .gitignore, pre-commit
 - `security-iot` — Seguridad IoT: TLS, cifrado LoRa, hardening, Secure Boot
+
+### Cloud & Datos
 - `firebase-rtdb` — Firebase Realtime Database desde ESP32 + estructura de datos
+
+### Diseño Web & UI
+- `dashboard-ui` — Diseño de dashboards IoT industriales: layout, colores, cards, vistas multi-app, alertas
+- `web-animations` — Micro-interacciones CSS, glassmorphism, transiciones, efectos dark theme
+- `data-viz` — Visualización de datos en tiempo real: Chart.js, patrones de gráficos, tooltips, gauges
 
 ## Reglas Generales
 - Código en **C++ / Arduino framework**
