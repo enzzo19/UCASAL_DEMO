@@ -230,14 +230,66 @@ const lmic_pinmap lmic_pins = {
 | Rural, máximo alcance | 12 | 125 kHz | 4/8 | 10-15+ km |
 | Alta velocidad, corto alcance | 7 | 250 kHz | 4/5 | 1-3 km |
 
+## Protocolo de Telemetría (Proyecto UCASAL)
+
+### Paquete compartido: telemetria_packet.h
+```cpp
+#ifndef TELEMETRIA_PACKET_H
+#define TELEMETRIA_PACKET_H
+
+#include <stdint.h>
+
+// Versión del protocolo — incrementar si cambia la estructura
+#define TELEMETRIA_VERSION 1
+
+struct TelemetriaPacket {
+    uint8_t  version;       // Versión del protocolo
+    uint8_t  nodeId;        // ID del nodo transmisor (1-254)
+    uint32_t secuencia;     // Contador anti-replay
+    float    temperatura;   // °C (DHT22)
+    float    humedad;       // % (DHT22)
+    float    presion;       // hPa (BMP180)
+    float    altitud;       // metros (BMP180)
+    float    sensTermica;   // °C (calculada)
+    uint16_t bateria_mV;    // Voltaje batería
+    uint8_t  errores;       // Errores de lectura acumulados
+} __attribute__((packed));  // 28 bytes total
+
+// Paquete de ACK (RX → TX)
+struct AckPacket {
+    uint8_t  version;
+    uint8_t  nodeId;        // ID del nodo que se confirma
+    uint32_t secuencia;     // Secuencia confirmada
+    int16_t  rssi;          // RSSI medido en RX
+    uint8_t  comando;       // 0=nada, 1=cambiar intervalo, etc.
+} __attribute__((packed));  // 9 bytes
+
+#endif
+```
+
+### Parámetros LoRa para Telemetría
+```cpp
+// Config óptima para telemetría en zona urbana/suburbana Salta
+#define LORA_FREQ     915.0   // MHz (Argentina)
+#define LORA_BW       125.0   // kHz
+#define LORA_SF       9       // SF9 = buen balance alcance/velocidad
+#define LORA_CR       7       // 4/7 = buena protección errores
+#define LORA_SYNC     0x12    // Sync word privado
+#define LORA_POWER    17      // dBm
+#define LORA_PREAMBLE 8
+```
+
 ## Instrucciones para el Asistente
 
 Al generar código LoRa para la Heltec LoRa32 V2:
 - Siempre definir los pines correctos (NSS=18, DIO0=26, RST=14, DIO1=35).
-- Preguntar la frecuencia regional si no se especifica (915 MHz para América, 868 MHz para Europa, 433 MHz para Asia).
+- Frecuencia: **915 MHz** (Argentina). Solo preguntar si el contexto es otro país.
 - Preferir RadioLib sobre la librería LoRa clásica para proyectos nuevos.
 - Para comunicación punto-a-punto, usar el mismo Sync Word, SF y BW en ambos extremos.
 - Recordar que LoRa es half-duplex: no puede transmitir y recibir simultáneamente.
+- Usar `telemetria_packet.h` compartido entre TX y RX para el proyecto de telemetría.
+- Incluir contador de secuencia para protección anti-replay.
 - Advertir sobre el duty cycle: en la banda 868 MHz (EU) hay límite legal de 1% de uso del canal.
 - Para paquetes grandes, advertir que el payload máximo LoRa es 255 bytes.
 - En LoRaWAN, el payload máximo varía según DR (Data Rate), típicamente 51-222 bytes.
+- El proyecto usa 2 placas Heltec V2 idénticas: una TX (campo) y una RX (base).
