@@ -143,7 +143,7 @@ void actualizarOLED(bool txOK) {
 
     snprintf(buf, sizeof(buf), "P: %.1f hPa", pkt.presion);
     display.drawStr(0, 37, buf);
-    snprintf(buf, sizeof(buf), "A: %.0f m", pkt.altitud);
+    snprintf(buf, sizeof(buf), "A:%.0fm", pkt.altitud);
     display.drawStr(80, 37, buf);
 
     // Línea separadora
