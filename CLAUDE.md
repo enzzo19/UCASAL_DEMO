@@ -24,8 +24,8 @@ FASE 4 — Dashboard Web                 ✅
 └── web/               Dashboard multi-vista industrial (Ambiental/Caldera/Litio)
                        Firebase RTDB, Chart.js, animaciones CSS
 
-FASE 5 — App Móvil                     ◄── EN PROGRESO
-└── app/               React Native + Expo
+FASE 5 — App Móvil                     ✅
+└── app/               React Native + Expo SDK 54
                        3 vistas industriales, Firebase real-time
 ```
 
@@ -129,11 +129,18 @@ Las siguientes skills están en `.claude/skills/`:
 
 ### Cloud & Datos
 - `firebase-rtdb` — Firebase Realtime Database desde ESP32 + estructura de datos
+- `telemetria-packet` — Contrato de datos compartido: struct C++ ↔ Firebase JSON ↔ TypeScript interface
 
 ### Diseño Web & UI
 - `dashboard-ui` — Diseño de dashboards IoT industriales: layout, colores, cards, vistas multi-app, alertas
 - `web-animations` — Micro-interacciones CSS, glassmorphism, transiciones, efectos dark theme
 - `data-viz` — Visualización de datos en tiempo real: Chart.js, patrones de gráficos, tooltips, gauges
+
+### App Móvil
+- `expo-react-native` — Stack Expo SDK 54, estructura de la app, Firebase real-time, troubleshooting
+
+### Workshop
+- `workshop-presenter` — Guía de demostración: checklist, orden de fases, troubleshooting en vivo
 
 ## Reglas Generales
 - Código en **C++ / Arduino framework**
@@ -144,6 +151,15 @@ Las siguientes skills están en `.claude/skills/`:
 - Frecuencia LoRa: 915 MHz (Argentina)
 - **Dos placas**: TX (campo, con sensores) y RX (base, con WiFi/Firebase)
 - Paquete de telemetría compartido en `telemetria_packet.h`
+
+## App Móvil (Expo + React Native)
+- **Expo SDK 54** — no subir sin verificar versión de Expo Go del usuario
+- Dependencias exactas en skill `expo-react-native`
+- Firebase listener estable: `useEffect` con `[]`, dedup con `useRef` (NO `useState`)
+- EAS CLI: usar `npx eas-cli` (no `eas` directo, no está en PATH)
+- Cuenta Expo: `enzzo195`
+- Build APK: `npx eas-cli build --platform android --profile preview`
+- Desarrollo: `cd app && npx expo start --clear`
 
 ## Reglas de Seguridad (OBLIGATORIAS)
 - **NUNCA** escribir API keys, contraseñas, tokens o credenciales en archivos de código

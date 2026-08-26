@@ -15,7 +15,7 @@ export default function App() {
   const [data, setData] = useState<SensorData | null>(null);
   const [connected, setConnected] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('general');
-  const [lastTimestamp, setLastTimestamp] = useState<number | null>(null);
+  const lastTimestampRef = useRef<number | null>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -31,33 +31,37 @@ export default function App() {
     return () => pulse.stop();
   }, []);
 
-  // Firebase listener
+  // Firebase real-time listener (stable — runs once on mount)
   useEffect(() => {
     const dataRef = ref(database, '/actual');
 
+    // Primary: real-time listener
     const unsubscribe = onValue(dataRef, (snapshot) => {
       const val = snapshot.val();
-      if (val && val.timestamp !== lastTimestamp) {
+      if (val) {
+        lastTimestampRef.current = val.timestamp;
         setData(val);
-        setLastTimestamp(val.timestamp);
         setConnected(true);
       }
+    }, (error) => {
+      console.warn('Firebase onValue error:', error);
+      setConnected(false);
     });
 
-    // Polling fallback every 3s
+    // Fallback: polling every 5s (catches missed updates)
     const interval = setInterval(async () => {
       try {
         const snapshot = await get(dataRef);
         const val = snapshot.val();
-        if (val && val.timestamp !== lastTimestamp) {
+        if (val && val.timestamp !== lastTimestampRef.current) {
+          lastTimestampRef.current = val.timestamp;
           setData(val);
-          setLastTimestamp(val.timestamp);
           setConnected(true);
         }
       } catch (e) {
         // Silent fail on polling
       }
-    }, 3000);
+    }, 5000);
 
     // Connection state
     const connRef = ref(database, '.info/connected');
@@ -70,7 +74,7 @@ export default function App() {
       connUnsub();
       clearInterval(interval);
     };
-  }, [lastTimestamp]);
+  }, []);
 
   // View switch animation
   const switchView = (view: ViewType) => {
